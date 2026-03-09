@@ -4,6 +4,9 @@ static EventGroupHandle_t wifiEventGroup;
 static int retryCounts = 0;
 static const char* TAG = "WiFi";
 
+uint8_t TX_MAC_ADDRESS[6] = {0x24, 0x6F, 0x28, 0xAB, 0xCD, 0xEF};
+QueueHandle_t csi_queue;
+
 static void wifiHandler(void *args, esp_event_base_t eventBase, int32_t eventId, void* eventData) {
     switch(eventId) {
         case WIFI_EVENT_STA_START:
@@ -99,4 +102,16 @@ esp_err_t wifiInit() {
     EventBits_t bits = xEventGroupWaitBits(wifiEventGroup, GOT_IP_BIT, pdFALSE, pdFALSE, portMAX_DELAY);
 
     return ESP_OK;
+}
+
+void csi_callback(void *ctx, wifi_csi_info_t *data) {
+    uint8_t *sender_mac = data->mac; 
+    csi_packet_t packet;
+
+    if (memcmp(TX_MAC_ADDRESS, sender_mac, 6) != 0) {
+        return; 
+    }
+
+    memcpy(packet.raw_data, data->buf, 128);
+    xQueueSend(csi_queue, &packet, 0);
 }

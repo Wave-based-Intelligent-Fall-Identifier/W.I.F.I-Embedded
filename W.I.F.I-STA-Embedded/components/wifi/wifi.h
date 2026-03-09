@@ -2,6 +2,7 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <math.h>
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -26,5 +27,10 @@
 #define WIFI_PASS      "ericeric0223"
 #define MAXIMUM_RETRY  5
 
+typedef struct {
+    int8_t raw_data[128]; 
+} csi_packet_t;
+
 esp_err_t wifiInit();
 static void wifiHandler(void *args, esp_event_base_t eventBase, int32_t eventId, void* eventData);
+void csi_callback(void *ctx, wifi_csi_info_t *data);
