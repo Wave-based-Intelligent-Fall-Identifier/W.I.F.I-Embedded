@@ -3,6 +3,7 @@
 static EventGroupHandle_t wifiEventGroup;
 static int retryCounts = 0;
 static const char* TAG = "WiFi";
+QueueHandle_t csi_queue;
 
 uint8_t TX_MAC_ADDRESS[6] = {0x24, 0x6F, 0x28, 0xAB, 0xCD, 0xEF};
 
@@ -103,7 +104,7 @@ esp_err_t wifiInit(void) {
     return ESP_OK;
 }
 
-static void csi_callback(void *ctx, wifi_csi_info_t *data) {
+void csi_callback(void *ctx, wifi_csi_info_t *data) {
     uint8_t *sender_mac = data->mac; 
     csi_packet_t packet;
 
@@ -115,7 +116,7 @@ static void csi_callback(void *ctx, wifi_csi_info_t *data) {
     xQueueSend(csi_queue, &packet, 0);
 }
 
-static void csi_data_calculate(void* pvParameters) {
+void csi_data_calculate(void* pvParameters) {
     csi_packet_t packet;
     csi_queue = (QueueHandle_t)pvParameters;
     
