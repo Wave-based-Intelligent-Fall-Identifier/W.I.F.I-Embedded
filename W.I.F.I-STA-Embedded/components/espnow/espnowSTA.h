@@ -11,8 +11,9 @@
 #include "esp_log.h"
 #include "nvs_flash.h"
 
-#define WIFI_CHANNEL 6
-
 typedef struct {
     uint8_t command; 
 } espnow_payload_t;
+
+void espnow_recv_cb(const esp_now_recv_info_t *esp_now_info, const uint8_t *data, int data_len);
+esp_err_t espnow_init_setup(void);
