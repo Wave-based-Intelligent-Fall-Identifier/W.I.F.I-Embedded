@@ -87,13 +87,9 @@ esp_err_t wifiInit(void) {
         return err;
     }
 
-    wifi_config_t wifi_config = {
-        .sta = {
-            .ssid = WIFI_SSID,
-            .password = WIFI_PASS,
-        },
-    };
-    
+    wifi_config_t wifi_config;    
+    strcpy((char *)wifi_config.sta.ssid, WIFI_SSID);
+    strcpy((char *)wifi_config.sta.password, WIFI_PASS);
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));
     ESP_ERROR_CHECK(esp_wifi_start());
@@ -105,6 +101,10 @@ esp_err_t wifiInit(void) {
 }
 
 void csi_callback(void *ctx, wifi_csi_info_t *data) {
+    if (csi_queue == NULL) {
+        return;
+    }
+
     uint8_t *sender_mac = data->mac; 
     csi_packet_t packet;
 
@@ -118,7 +118,6 @@ void csi_callback(void *ctx, wifi_csi_info_t *data) {
 
 void csi_data_calculate(void* pvParameters) {
     csi_packet_t packet;
-    csi_queue = (QueueHandle_t)pvParameters;
     
     while(1) {
         if(xQueueReceive(csi_queue, &packet, portMAX_DELAY)) {
