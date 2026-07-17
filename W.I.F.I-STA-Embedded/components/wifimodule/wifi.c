@@ -1,23 +1,23 @@
 #include "wifi.h"
 #include "baseline_filter.h"
+#include "espnowAP.h"
 #include <math.h>
 #include "driver/gpio.h"
 
-// 보드 내장 LED 핀(대부분 ESP32 보드 GPIO2). 보드가 다르면 이 값만 바꾸면 됨.
 #define STATUS_LED_PIN 2
 
 static const char* TAG = "WiFi";
 QueueHandle_t csi_queue;
 
-// AT(STA) 접속 여부 — wifiHandler 가 갱신, wait_at_task 가 대기 로그 출력에 사용.
 volatile bool at_connected = false;
-// 유효 CSI 프레임(AT 송신분) 수신 카운터 — status_led_task 가 "통신 중" 깜빡임에 사용.
 volatile uint32_t g_csi_rx_count = 0;
 
 //printf된 TX MAC ADDRESS 값 삽입
 static const uint8_t TX_MAC_ADDRESS[6] = {
     0x78, 0x1C, 0x3C, 0xF4, 0xAF, 0xF4
 };
+
+static uint8_t g_ap_mac[6] = {0};
 
 static void wifiHandler(void *args, esp_event_base_t eventBase, int32_t eventId, void* eventData) {
     if (eventId == WIFI_EVENT_AP_START) {
@@ -62,10 +62,10 @@ esp_err_t wifiInit(void) {
     }
 
     
-    // static bool is_paired = false;
     uint8_t mac[6];
 
     esp_wifi_get_mac(WIFI_IF_AP, mac);
+    memcpy(g_ap_mac, mac, 6);
 
     printf("%02X:%02X:%02X:%02X:%02X:%02X\n",
             mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
@@ -107,22 +107,24 @@ void csi_callback(void *ctx, wifi_csi_info_t *data) {
         return;
     }
 
-    // 빈/비정상 길이 패킷(amplitude 한 쌍도 못 만드는 것) 드롭 — 빈 값 방지
     if (data->len < 2) {
         return;
     }
 
-    const uint8_t*sender_mac = data->mac;
+    // (1) STA 가 보낸 데이터 프레임, 또는 (2) ping 응답 ACK(dmac==AP MAC) 만 통과
+    bool from_target = (memcmp(TX_MAC_ADDRESS, data->mac, 6) == 0);
+    bool ack_to_us   = (memcmp(g_ap_mac, data->dmac, 6) == 0);
 
-    if (memcmp(TX_MAC_ADDRESS, sender_mac, 6) != 0) {
+    if (!from_target && !ack_to_us) {
         return;
     }
 
-    g_csi_rx_count++;   // AT 로부터 유효 CSI 프레임 수신 → LED "통신 중" 표시용
+    g_csi_rx_count++;
 
     csi_packet_t packet = {0};
     packet.len = data->len;
-    
+    packet.rssi = data->rx_ctrl.rssi;
+
     if (packet.len > 128) {
         packet.len = 128;
     }
@@ -157,7 +159,7 @@ void csi_data_calculate(void* pvParameters) {
 
             // 줄 앞 모드 표시: RAW=기준선 학습 중(raw 진폭), FILT=기준선 감산값
             // 각 값은 sc{번호}:{진폭} 형태로 어떤 서브캐리어인지 보이게 출력
-            printf("%s| ", baseline_is_ready() ? "FILT" : "RAW ");
+            printf("%s rssi:%d| ", baseline_is_ready() ? "FILT" : "RAW ", packet.rssi);
 
             for(int i = 0; i+1 < packet.len; i+=2) {
                 int sc = i / 2;                    // 서브캐리어 인덱스 (0,1,2,...)
@@ -181,11 +183,34 @@ void csi_data_calculate(void* pvParameters) {
 }
 
 void wait_at_task(void* pvParameters) {
+    uint32_t last_count = 0;
     while (1) {
         if (!at_connected) {
             ESP_LOGI(TAG, "AT 연결 대기 중...");
+        } else {
+            uint32_t now = g_csi_rx_count;
+            uint32_t delta = now - last_count;
+            last_count = now;
+            ESP_LOGI(TAG, "CSI 유입율: %lu프레임/2초 (~%lu Hz)",
+                     (unsigned long)delta, (unsigned long)(delta / 2));
         }
         vTaskDelay(pdMS_TO_TICKS(2000));
+    }
+}
+
+void csi_ping_task(void* pvParameters) {
+    bool peer_ready = (espnow_add_unicast_peer(TX_MAC_ADDRESS) == ESP_OK);
+
+    while (1) {
+        if (at_connected) {
+            if (!peer_ready) {
+                peer_ready = (espnow_add_unicast_peer(TX_MAC_ADDRESS) == ESP_OK);
+            }
+            if (peer_ready) {
+                espnow_send_ping(TX_MAC_ADDRESS);
+            }
+        }
+        vTaskDelay(pdMS_TO_TICKS(20));   // ~50Hz
     }
 }
 

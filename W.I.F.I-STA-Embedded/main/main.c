@@ -39,8 +39,23 @@ void app_main(void) {
     ESP_ERROR_CHECK(espnow_send_pairing_request());
 
     ESP_LOGI(TAG, "콜백 등록 및 CSI 활성 [5/6]...");
+    // dump_ack_en=true 이어야 ping 응답 ACK 프레임에서도 CSI 를 얻는다.
+    wifi_csi_config_t csi_config = {
+        .lltf_en = true,
+        .htltf_en = true,
+        .stbc_htltf2_en = true,
+        .ltf_merge_en = true,
+        .channel_filter_en = true,
+        .manu_scale = false,
+        .shift = 0,
+        .dump_ack_en = true,
+    };
+    ESP_ERROR_CHECK(esp_wifi_set_csi_config(&csi_config));
     ESP_ERROR_CHECK(esp_wifi_set_csi_rx_cb(&csi_callback, NULL));
     ESP_ERROR_CHECK(esp_wifi_set_csi(true));
+
+    // CSI 유입율을 높이기 위한 주기 ping 송신
+    xTaskCreate(csi_ping_task, "CSI_PING_TASK", 2048, NULL, 4, NULL);
 
     ESP_LOGI(TAG, "설정 완료 [6/6]...");
 }

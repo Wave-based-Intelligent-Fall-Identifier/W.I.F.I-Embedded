@@ -41,3 +41,29 @@ esp_err_t espnow_send_pairing_request(void) {
     }
     return err;
 }
+
+esp_err_t espnow_add_unicast_peer(const uint8_t *mac) {
+    if (mac == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    if (esp_now_is_peer_exist(mac)) {
+        return ESP_OK;
+    }
+
+    esp_now_peer_info_t peer = {0};
+    memcpy(peer.peer_addr, mac, 6);
+    peer.channel = 0;
+    peer.ifidx   = WIFI_IF_AP;
+    peer.encrypt = false;
+
+    esp_err_t err = esp_now_add_peer(&peer);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "유니캐스트 피어 등록 실패 (0x%x)", err);
+    }
+    return err;
+}
+
+esp_err_t espnow_send_ping(const uint8_t *mac) {
+    static const uint8_t payload = 0xAA;
+    return esp_now_send(mac, &payload, sizeof(payload));
+}
