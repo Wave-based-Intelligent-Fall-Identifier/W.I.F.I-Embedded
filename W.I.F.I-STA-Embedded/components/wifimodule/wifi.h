@@ -21,8 +21,8 @@
 
 #include "nvs_flash.h"
 
-#define WIFI_SSID      "wify_csi_ap"
-#define WIFI_PASS      "ekdus825"
+#define WIFI_SSID      CONFIG_ESP_WIFI_SSID
+#define WIFI_PASS      CONFIG_ESP_WIFI_PASSWORD
 
 typedef struct {
     uint8_t len;
