@@ -20,9 +20,15 @@
 #include "lwip/sys.h"
 
 #include "nvs_flash.h"
+#include "sdkconfig.h"
 
-#define WIFI_SSID      "wify_csi_ap"
-#define WIFI_PASS      "ekdus825"
+// 자격증명은 Kconfig(menuconfig) → 로컬 sdkconfig 에서 주입한다.
+// 실제 SSID/비밀번호는 로컬 sdkconfig 에만 저장되며 git 에는 올라가지 않는다.
+// (설정: idf.py menuconfig → "WIFY Credentials")
+#define WIFI_SSID      CONFIG_WIFY_AP_SSID     // SoftAP: AT 의 CSI 링크(직접 결합)
+#define WIFI_PASS      CONFIG_WIFY_AP_PASS
+#define HOME_SSID      CONFIG_WIFY_HOME_SSID   // Station 업링크: 인터넷/브로커 도달용
+#define HOME_PASS      CONFIG_WIFY_HOME_PASS
 
 typedef struct {
     uint8_t len;

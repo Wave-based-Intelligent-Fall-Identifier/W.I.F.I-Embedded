@@ -14,24 +14,46 @@ volatile bool at_connected = false;
 // 유효 CSI 프레임(AT 송신분) 수신 카운터 — status_led_task 가 "통신 중" 깜빡임에 사용.
 volatile uint32_t g_csi_rx_count = 0;
 
-//printf된 TX MAC ADDRESS 값 삽입
+//printf된 TX MAC ADDRESS 값 삽입 (스왑후 AT 송신보드 = COM5 의 STA MAC)
 static const uint8_t TX_MAC_ADDRESS[6] = {
-    0x78, 0x1C, 0x3C, 0xF4, 0xAF, 0xF4
+    0x20, 0x50, 0x0D, 0x07, 0xFC, 0xCC
 };
 
+// SoftAP netif 핸들(NAPT 활성화 대상). wifiInit 에서 저장.
+static esp_netif_t *s_ap_netif = NULL;
+
 static void wifiHandler(void *args, esp_event_base_t eventBase, int32_t eventId, void* eventData) {
-    if (eventId == WIFI_EVENT_AP_START) {
+    if (eventBase == WIFI_EVENT && eventId == WIFI_EVENT_AP_START) {
         ESP_LOGI(TAG, "WiFi AP모드 시작");
     }
-    else if (eventId == WIFI_EVENT_AP_STACONNECTED) {
+    else if (eventBase == WIFI_EVENT && eventId == WIFI_EVENT_AP_STACONNECTED) {
         wifi_event_ap_staconnected_t* event = (wifi_event_ap_staconnected_t*) eventData;
         at_connected = true;
         ESP_LOGI(TAG, "장치 접속됨 MAC: " MACSTR ", AID: %d", MAC2STR(event->mac), event->aid);
     }
-    else if (eventId == WIFI_EVENT_AP_STADISCONNECTED) {
+    else if (eventBase == WIFI_EVENT && eventId == WIFI_EVENT_AP_STADISCONNECTED) {
         wifi_event_ap_stadisconnected_t* event = (wifi_event_ap_stadisconnected_t*) eventData;
         at_connected = false;
         ESP_LOGI(TAG, "장치 연결 끊김 MAC: " MACSTR ", AID: %d", MAC2STR(event->mac), event->aid);
+    }
+    // ---- Station(업링크 dd) 이벤트 ----
+    else if (eventBase == WIFI_EVENT && eventId == WIFI_EVENT_STA_START) {
+        esp_wifi_connect();
+    }
+    else if (eventBase == WIFI_EVENT && eventId == WIFI_EVENT_STA_DISCONNECTED) {
+        ESP_LOGW(TAG, "업링크(dd) 끊김, 재접속");
+        esp_wifi_connect();
+    }
+    else if (eventBase == IP_EVENT && eventId == IP_EVENT_STA_GOT_IP) {
+        ip_event_got_ip_t* event = (ip_event_got_ip_t*) eventData;
+        ESP_LOGI(TAG, "업링크(dd) IP 획득: " IPSTR, IP2STR(&event->ip_info.ip));
+        // NAPT 활성화: SoftAP 클라이언트(AT, 192.168.4.x) → dd 업링크로 라우팅.
+        // → AT 가 wify_csi_ap(조밀 CSI)에 붙은 채로 브로커(172.20.10.9)에 도달 가능.
+        if (s_ap_netif) {
+            esp_err_t r = esp_netif_napt_enable(s_ap_netif);
+            ESP_LOGI(TAG, "NAPT enable: %s (AT->dd 라우팅 %s)",
+                     esp_err_to_name(r), (r == ESP_OK) ? "활성" : "실패");
+        }
     }
 }
 
@@ -40,7 +62,8 @@ esp_err_t wifiInit(void) {
 
     ESP_ERROR_CHECK(esp_netif_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());
-    esp_netif_create_default_wifi_ap();
+    s_ap_netif = esp_netif_create_default_wifi_ap();   // SoftAP(AT 링크)
+    esp_netif_create_default_wifi_sta();               // Station(dd 업링크)
 
     err = nvs_flash_init();
     if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND) {
@@ -78,27 +101,44 @@ esp_err_t wifiInit(void) {
         ESP_LOGE(TAG, "핸들러 등록 실패 (handler.1)");
         return err;
     }
+    // Station 업링크 IP 획득 이벤트 → NAPT 활성화용
+    esp_event_handler_instance_t instance_got_ip;
+    err = esp_event_handler_instance_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &wifiHandler, NULL, &instance_got_ip);
+    if(err != ESP_OK) {
+        ESP_LOGE(TAG, "핸들러 등록 실패 (IP_EVENT)");
+        return err;
+    }
 
-    wifi_config_t wifi_config = {
+    wifi_config_t ap_config = {
         .ap = {
             .ssid = WIFI_SSID,
             .ssid_len = strlen(WIFI_SSID),
             .channel = 6,
             .password = WIFI_PASS,
             .max_connection = 2,
-            .authmode = WIFI_AUTH_WPA_WPA2_PSK
+            .authmode = WIFI_AUTH_WPA2_PSK
+        },
+    };
+    if (strlen(WIFI_PASS) == 0) {
+        ap_config.ap.authmode = WIFI_AUTH_OPEN;
+    }
+
+    wifi_config_t sta_config = {
+        .sta = {
+            .ssid = HOME_SSID,
+            .password = HOME_PASS,
+            .threshold.authmode = WIFI_AUTH_WPA2_PSK,
         },
     };
 
-    if (strlen(WIFI_PASS) == 0) {
-        wifi_config.ap.authmode = WIFI_AUTH_OPEN;
-    }
+    // APSTA: SoftAP(wify_csi_ap, AT 링크) + Station(dd, 업링크) 동시 운용.
+    // 채널은 Station 이 붙는 dd(ch6) 로 강제되며 SoftAP 도 같은 ch6 를 따른다.
+    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_APSTA));
+    ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &ap_config));
+    ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &sta_config));
+    ESP_ERROR_CHECK(esp_wifi_start());   // STA_START → wifiHandler 에서 esp_wifi_connect()
 
-    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_AP));
-    ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &wifi_config));
-    ESP_ERROR_CHECK(esp_wifi_start());
-
-    ESP_LOGI(TAG, "WiFi(AP) 초기화 성공");
+    ESP_LOGI(TAG, "WiFi(APSTA) 초기화 성공 — SoftAP(%s) + Station(%s)", WIFI_SSID, HOME_SSID);
     return ESP_OK;
 }
 

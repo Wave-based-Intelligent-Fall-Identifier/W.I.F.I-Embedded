@@ -30,17 +30,18 @@ void app_main(void) {
     ESP_LOGI(TAG, "ESP-NOW 초기화 설정 [2/6]...");
     ESP_ERROR_CHECK(espnow_init_setup());
 
-    // promiscuous(무차별 수신) 모드: 채널의 모든 패킷을 받아 CSI 추출이 가능해진다.
-    // AP 채널은 wifi_config.ap.channel=6 으로 이미 고정돼 별도 set_channel 불필요.
-    ESP_LOGI(TAG, "Promiscuous(무차별 수신) 모드 시작 [3/6]...");
-    ESP_ERROR_CHECK(esp_wifi_set_promiscuous(true));
+    // [3/6] APSTA + NAPT 게이트웨이 구성에서는 STA 자체 CSI 수신을 끈다.
+    //   - 센싱은 AT 가 SoftAP 링크로 수행(AT 가 AI+MQTT 담당).
+    //   - promiscuous 모드는 APSTA 데이터 포워딩(NAPT)과 간섭할 수 있어 비활성.
+    ESP_LOGI(TAG, "게이트웨이 모드: promiscuous/CSI 비활성 [3/6]...");
+    // ESP_ERROR_CHECK(esp_wifi_set_promiscuous(true));
 
     ESP_LOGI(TAG, "페어링 요청 송신 [4/6]...");
     ESP_ERROR_CHECK(espnow_send_pairing_request());
 
-    ESP_LOGI(TAG, "콜백 등록 및 CSI 활성 [5/6]...");
-    ESP_ERROR_CHECK(esp_wifi_set_csi_rx_cb(&csi_callback, NULL));
-    ESP_ERROR_CHECK(esp_wifi_set_csi(true));
+    ESP_LOGI(TAG, "콜백 등록 및 CSI 활성 [5/6]... (게이트웨이 모드: 스킵)");
+    // ESP_ERROR_CHECK(esp_wifi_set_csi_rx_cb(&csi_callback, NULL));
+    // ESP_ERROR_CHECK(esp_wifi_set_csi(true));
 
     ESP_LOGI(TAG, "설정 완료 [6/6]...");
 }
