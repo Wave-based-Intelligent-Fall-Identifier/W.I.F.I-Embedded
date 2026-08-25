@@ -1,6 +1,0 @@
-# 프로젝트 기본 설정 (clone 후 빌드 시 sdkconfig 생성 기준값)
-# sdkconfig 자체는 .gitignore 대상이라, 재현성 보장을 위해 핵심값을 여기에 둔다.
-
-# WiFi CSI 캡처 활성화 — esp_wifi_set_csi(true) 동작에 필수.
-# 미설정 시 기본값 n 이라 set_csi 가 실패하고 ESP_ERROR_CHECK 로 부팅 abort.
-CONFIG_ESP_WIFI_CSI_ENABLED=y

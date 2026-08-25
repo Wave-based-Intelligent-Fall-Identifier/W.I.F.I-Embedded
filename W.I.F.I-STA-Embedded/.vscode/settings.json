@@ -10,6 +10,6 @@
     "idf.customExtraVars": {
         "IDF_TARGET": "esp32"
     },
-    "idf.currentSetup": "C:/Espressif/frameworks/esp-idf-v5.5.4/",
+    "idf.currentSetup": "C:/Espressif/frameworks/esp-idf-v5.3.1/",
     "idf.flashType": "UART"
 }

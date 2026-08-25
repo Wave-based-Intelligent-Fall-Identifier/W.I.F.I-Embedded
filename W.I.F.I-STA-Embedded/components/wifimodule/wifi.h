@@ -22,17 +22,16 @@
 #include "nvs_flash.h"
 #include "sdkconfig.h"
 
-// 자격증명은 Kconfig(menuconfig) → 로컬 sdkconfig 에서 주입한다.
-// 실제 SSID/비밀번호는 로컬 sdkconfig 에만 저장되며 git 에는 올라가지 않는다.
-// (설정: idf.py menuconfig → "WIFY Credentials")
-#define WIFI_SSID      CONFIG_WIFY_AP_SSID     // SoftAP: AT 의 CSI 링크(직접 결합)
+
+#define WIFI_SSID      CONFIG_WIFY_AP_SSID     
 #define WIFI_PASS      CONFIG_WIFY_AP_PASS
-#define HOME_SSID      CONFIG_WIFY_HOME_SSID   // Station 업링크: 인터넷/브로커 도달용
+#define HOME_SSID      CONFIG_WIFY_HOME_SSID
 #define HOME_PASS      CONFIG_WIFY_HOME_PASS
 
 typedef struct {
     uint8_t len;
-    int8_t raw_data[128]; 
+    int8_t rssi;            // 수신 신호 세기(dBm) — 실제 RF 강도 진단용
+    int8_t raw_data[128];
 } csi_packet_t;
 
 extern QueueHandle_t csi_queue;
@@ -70,6 +69,13 @@ void wait_at_task(void* pvParameters);
 
 /** 내장 LED 로 통신 상태(AT 접속·CSI 수신) 표시 태스크 */
 void status_led_task(void* pvParameters);
+
+/**
+ * @brief CSI 유도 ping 태스크 — 대상 STA 로 주기 송신해 ACK/CSI 유입율을 높임
+ * @param[in] void* pvParameters
+ * @retval None
+ */
+void csi_ping_task(void* pvParameters);
 
 /** 유효 CSI 프레임 수신 카운터 (LED "통신 중" 표시용) */
 extern volatile uint32_t g_csi_rx_count;

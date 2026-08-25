@@ -39,9 +39,22 @@ void app_main(void) {
     ESP_LOGI(TAG, "페어링 요청 송신 [4/6]...");
     ESP_ERROR_CHECK(espnow_send_pairing_request());
 
-    ESP_LOGI(TAG, "콜백 등록 및 CSI 활성 [5/6]... (게이트웨이 모드: 스킵)");
-    // ESP_ERROR_CHECK(esp_wifi_set_csi_rx_cb(&csi_callback, NULL));
-    // ESP_ERROR_CHECK(esp_wifi_set_csi(true));
+    ESP_LOGI(TAG, "콜백 등록 및 CSI 활성 [5/6]...");
+    wifi_csi_config_t csi_config = {
+        .lltf_en = true,
+        .htltf_en = true,
+        .stbc_htltf2_en = true,
+        .ltf_merge_en = true,
+        .channel_filter_en = true,
+        .manu_scale = false,
+        .shift = 0,
+        .dump_ack_en = true,
+    };
+    ESP_ERROR_CHECK(esp_wifi_set_csi_config(&csi_config));
+    ESP_ERROR_CHECK(esp_wifi_set_csi_rx_cb(&csi_callback, NULL));
+    ESP_ERROR_CHECK(esp_wifi_set_csi(true));
+
+    xTaskCreate(csi_ping_task, "CSI_PING_TASK", 2048, NULL, 4, NULL);
 
     ESP_LOGI(TAG, "설정 완료 [6/6]...");
 }
