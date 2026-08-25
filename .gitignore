@@ -5,6 +5,7 @@
 *.map
 
 # ESP-IDF 생성물
+sdkconfig            # 자격증명 포함 → git 에 올리지 않음(로컬 전용)
 sdkconfig.old
 managed_components/
 

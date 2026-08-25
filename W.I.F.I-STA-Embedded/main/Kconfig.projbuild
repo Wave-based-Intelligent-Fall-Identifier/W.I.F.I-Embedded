@@ -1,0 +1,28 @@
+menu "WIFY Credentials"
+
+    config WIFY_AP_SSID
+        string "SoftAP SSID (AT 의 CSI 링크용)"
+        default "wify_csi_ap"
+        help
+            STA 보드가 여는 SoftAP 이름. AT 보드가 여기에 결합해 CSI 를 만든다.
+
+    config WIFY_AP_PASS
+        string "SoftAP 비밀번호"
+        default ""
+        help
+            SoftAP 비밀번호. 실제 값은 로컬 sdkconfig 에만 저장되며 git 에 올리지 말 것.
+            빈 값이면 오픈 AP 로 동작한다.
+
+    config WIFY_HOME_SSID
+        string "업링크(홈/폰) SSID"
+        default ""
+        help
+            브로커/인터넷 도달용 업링크 AP 이름(APSTA 게이트웨이 모드에서 사용).
+
+    config WIFY_HOME_PASS
+        string "업링크 비밀번호"
+        default ""
+        help
+            업링크 비밀번호. 실제 값은 로컬 sdkconfig 에만 저장되며 git 에 올리지 말 것.
+
+endmenu

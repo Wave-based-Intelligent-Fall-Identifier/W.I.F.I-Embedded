@@ -20,9 +20,13 @@
 #include "lwip/sys.h"
 
 #include "nvs_flash.h"
+#include "sdkconfig.h"
 
-#define WIFI_SSID      CONFIG_ESP_WIFI_SSID
-#define WIFI_PASS      CONFIG_ESP_WIFI_PASSWORD
+
+#define WIFI_SSID      CONFIG_WIFY_AP_SSID     
+#define WIFI_PASS      CONFIG_WIFY_AP_PASS
+#define HOME_SSID      CONFIG_WIFY_HOME_SSID
+#define HOME_PASS      CONFIG_WIFY_HOME_PASS
 
 typedef struct {
     uint8_t len;

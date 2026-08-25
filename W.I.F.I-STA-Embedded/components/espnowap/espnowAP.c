@@ -10,10 +10,37 @@ static const char* TAG = "ESP-NOW-AP";
 
 static const uint8_t BROADCAST_MAC[6] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
 
+/** 마지막으로 AT 로부터 수신한 명령(1=사람감지 ACT, 2=종료 DEACT). 0=아직 없음. */
+volatile uint8_t g_last_at_command = 0;
+
+/**
+ * @brief ESP-NOW 수신 콜백 — AT(송신보드)가 보낸 command 페이로드 처리.
+ *   command=1: 사람 감지(활성), command=2: 10분 경과 종료. 페이로드 첫 바이트가 명령값.
+ */
+static void espnow_recv_cb(const esp_now_recv_info_t *info, const uint8_t *data, int len) {
+    if (!info || !data || len < 1) {
+        return;
+    }
+    // CSI 트래픽 더미 프레임(50Hz, payload[0]=0xC5)은 무시 — 실제 PIR 명령(1/2)만 처리.
+    if (data[0] != 1 && data[0] != 2) {
+        return;
+    }
+    const uint8_t *m = info->src_addr;
+    g_last_at_command = data[0];
+    ESP_LOGI(TAG, "ESP-NOW 수신 from %02X:%02X:%02X:%02X:%02X:%02X, command=%u (len=%d)",
+             m[0], m[1], m[2], m[3], m[4], m[5], (unsigned)data[0], len);
+}
+
 esp_err_t espnow_init_setup(void) {
     esp_err_t err = esp_now_init();
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "ESP-NOW 초기화 실패");
+        return err;
+    }
+
+    err = esp_now_register_recv_cb(espnow_recv_cb);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "ESP-NOW recv 콜백 등록 실패");
         return err;
     }
 
